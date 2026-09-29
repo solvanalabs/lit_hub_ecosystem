@@ -62,19 +62,26 @@ function logoUrl(project) {
 }
 
 function buildMessage(slug, p) {
+  const pageUrl = `${SITE_URL}/ecosystem/${encodeURIComponent(slug)}`;
   const links = [
     p.url && `<a href="${esc(p.url)}">Website</a>`,
-    socialUrl("x", p.twitter) && `<a href="${esc(socialUrl("x", p.twitter))}">X</a>`,
+    socialUrl("x", p.twitter) && `<a href="${esc(socialUrl("x", p.twitter))}">𝕏</a>`,
     socialUrl("telegram", p.telegram) && `<a href="${esc(socialUrl("telegram", p.telegram))}">Telegram</a>`,
     /^https?:\/\//i.test(p.discord ?? "") && `<a href="${esc(p.discord)}">Discord</a>`,
-    `<a href="${SITE_URL}/ecosystem/${encodeURIComponent(slug)}">Lit Hub page</a>`,
+    `<a href="${pageUrl}">lit-hub page</a>`,
   ].filter(Boolean);
-  const tags = [...(p.categories ?? []), ...(p.instances ?? [])].map(esc).join(" · ");
-  const status = p.status && p.status !== "Live" ? ` <i>(${esc(p.status === "Not Live" ? "coming soon" : p.status.toLowerCase())})</i>` : "";
+  const categories = p.categories ?? [];
+  const status =
+    p.status && p.status !== "Live"
+      ? ` <i>(${esc(p.status === "Not Live" ? "coming soon" : p.status.toLowerCase())})</i>`
+      : "";
   return [
-    `🆕 <b>${esc(p.name)}</b> just joined Lit Hub${status}`,
-    p.description ? `<i>${esc(p.description)}</i>` : null,
-    tags ? tags : null,
+    `🆕 <b>${esc(p.name)}</b> just joined <a href="${SITE_URL}">lit-hub.org</a>${status}`,
+    "",
+    p.description ? `<b>Description</b>: <i>${esc(p.description)}</i>` : null,
+    categories.length
+      ? `<b>${categories.length === 1 ? "Category" : "Categories"}</b>: ${categories.map(esc).join(", ")}`
+      : null,
     "",
     links.join(" · "),
   ]
