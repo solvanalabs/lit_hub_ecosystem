@@ -1,0 +1,32 @@
+name: Announce new projects on Telegram
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "ecosystem/**"
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: "Project slug(s) to announce, comma-separated (test run)"
+        required: true
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/notify-telegram.mjs
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          SLUG: ${{ inputs.slug }}
+          SITE_URL: https://lit-hub.org
