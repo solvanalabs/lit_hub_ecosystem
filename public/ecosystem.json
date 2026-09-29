@@ -1084,6 +1084,31 @@
       "official": false
     },
     {
+      "slug": "lobster-agent-trader",
+      "name": "Lobster Agent Trader",
+      "description": "Turn the AI tokens you never spend intopositions that actually run. One loop that puts an idle monthly budget to work on",
+      "url": "https://projectlobster.github.io/Lobster-Agent-Trader/",
+      "twitter": "@lobsternft_lol",
+      "discord": "https://discord.gg/wZ3k3dqu8d",
+      "telegram": "t.me/projectlobster",
+      "logo": "/logos/lobster-agent-trader_logo.svg",
+      "categories": [
+        "Agents"
+      ],
+      "instances": [
+        "Lighter Core",
+        "Lighter Robinhood"
+      ],
+      "status": "Live",
+      "createdAt": "2026-09-29",
+      "official": false,
+      "builderDiscords": [
+        "modashibot"
+      ],
+      "longDescription": "LOBSTER AGENT TRADER\n\n1. OVERVIEW AND PROBLEM\n\nDevelopers regularly receive monthly AI token allowances. A significant portion\nexpires unused, evaporating without rollover or cash-out options. At the same\ntime, continuous quantitative routines—such as dynamic hedging, rebalancing, and\nrisk monitoring—are too small to justify manual attention yet too repetitive for\nhumans to execute reliably. Lobster Agent Trader bridges both gaps. It converts\nexpiring token balances into disciplined trading loops on Lighter DEX. It is an\nopen, observable engine offering pause control, audit logs, and rigid deterministic\nconstraints that language models cannot alter.\n\n\n2. TOKEN ALLOWANCE CONTROL\n\nTradable allowance equals monthly token budget minus reserved work budget plus\ncarry-over. The reserved balance remains strictly protected against bugs or runaway\nloops. Rather than relying on rigid ceilings, the engine projects cycle costs\ndynamically using moving averages from recent model calls. Pre-flight checks\nevaluate remaining allowances and daily cycle limits prior to invoking the LLM,\nensuring stopped or blocked runs consume zero tokens.\n\n\n3. DECISION AND EXECUTION WORKFLOW\n\nExecution proceeds through five distinct stages:\n- Allowance Gate: Evaluates available budget before querying market data APIs.\n- Market Snapshot: Aggregates order books, candles, and native Lighter funding\n  rates to prevent misleading cross-exchange carry inversions.\n- Structured Decision: The model generates strict JSON defining symbol, action,\n  size, confidence, and invalidation rules. Schema errors undergo two automated\n  repair attempts.\n- Execution: Translates dollar amounts into base asset units rounded down to market\n  precision, dispatching safe arrays directly to the toolkit.\n- Booking: Logs orders strictly at verified fill prices and quantities, marking\n  unfilled orders as blocked to keep records synchronized with exchange balances.\n\n\n4. GUARDRAILS AND SECURITY\n\nRisk management enforces strict clamping: oversized requests are capped at preset\nlimits rather than expanded. Default safeguards include a 250 dollar trade limit,\n3x leverage ceiling, 48 daily cycles, 20 dollar daily loss shutdown, and a 0.55\nconfidence floor.\n\nTransitioning to live trading demands three synchronized safeguards: setting\nLIGHTER_ENABLE_LIVE=1, enabling the UI toggle, and manually entering \"LIVE\". Private\nkeys reside strictly in file permissions set to 0600, never exposed to databases or\nbrowsers. The service binds exclusively to localhost with constant-time\nauthentication and cross-site request validation.\n\n\n5. PAPER MODE AND RUNTIME\n\nPaper trading operates under cross-margin, fills taker orders instantly, and omits\nfunding rates. It validates prompt logic and token economics rather than live\nprofitability. The engine runs on Node 22 with native SQLite and optimizes process\nlatency through intelligent caching.\n",
+      "demoUrl": "https://github.com/projectlobster/Lobster-Agent-Trader"
+    },
+    {
       "slug": "lunchdotfun",
       "name": "Lunchdotfun",
       "description": "Instantly launch memecoins in the Robinhood universe, with one click, for free.",
@@ -1903,5 +1928,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-09-29T09:27:58.516Z"
+  "generatedAt": "2026-09-29T11:59:13.101Z"
 }
