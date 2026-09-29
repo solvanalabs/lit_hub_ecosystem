@@ -1,0 +1,28 @@
+{
+  "name": "SPREADR",
+  "description": "Discover and capture funding and basis arbitrage opportunities with automated, low latency spread execution.",
+  "url": "https://www.spreadr.xyz",
+  "twitter": "@spreadr_xyz",
+  "discord": "https://discord.com/invite/XbbcWdFYjt",
+  "telegram": "",
+  "logo": "/logos/spreadr_logo.png",
+  "categories": [
+    "Terminal",
+    "Apps"
+  ],
+  "instances": [
+    "Lighter Core",
+    "Lighter Robinhood"
+  ],
+  "integrator_account_index": 27620,
+  "robinhood_integrator_account_index": 37580,
+  "status": "Live",
+  "createdAt": "2026-09-29",
+  "official": false,
+  "builderDiscords": [
+    "cuppydubs",
+    "vol_trader"
+  ],
+  "longDescription": "Discover and capture funding and basis arbitrage opportunities with automated, low latency spread execution.\n\nExecute spread trades across multiple perp DEXs, including Lighter Core and Lighter Robinhood. Set the spread you want between two markets and SPREADR dynamically quotes one leg and hedges the other the instant it fills.",
+  "demoUrl": "https://app.spreadr.xyz"
+}
