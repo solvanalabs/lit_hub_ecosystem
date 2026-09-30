@@ -9,12 +9,20 @@ on:
   workflow_dispatch:
     inputs:
       slug:
-        description: "Project slug(s) to announce, comma-separated (test run)"
+        description: "Project slug(s) to announce, comma-separated"
         required: true
+      dry_run:
+        description: "Generate preview artifacts without publishing to Telegram or X"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
 
 jobs:
   notify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,7 +30,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node scripts/notify-telegram.mjs
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Announce projects
+        run: node scripts/notify-telegram.mjs
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -34,3 +46,12 @@ jobs:
           AFTER: ${{ github.sha }}
           SLUG: ${{ inputs.slug }}
           SITE_URL: https://lit-hub.org
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+      - name: Save announcement cards and text
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: announcement-cards
+          path: output/announcements/
+          if-no-files-found: ignore
+          retention-days: 14

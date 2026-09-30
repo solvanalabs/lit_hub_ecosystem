@@ -1,0 +1,37 @@
+name: Test announcement cards
+
+on:
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "test/**"
+      - "package*.json"
+      - ".github/workflows/*announc*"
+      - ".github/workflows/notify-telegram.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - name: Preview full notifier without publishing
+        run: node scripts/notify-telegram.mjs
+        env:
+          DRY_RUN: "true"
+          SLUG: telegram-wallet,vooi,insilico-terminal
+      - uses: actions/upload-artifact@v4
+        with:
+          name: announcement-previews
+          path: output/announcements/
+          retention-days: 14

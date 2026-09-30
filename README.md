@@ -184,6 +184,12 @@ node scripts/build-request-a-protocol.mjs
 
 Then include the generated file in `public/` in your commit if it changed.
 
+## Project announcements
+
+New project files merged into `main` trigger announcements on Telegram and X.
+X posts include a generated 1600 × 900 card using the project's JSON name and
+logo. See [announcement setup, previews, and examples](docs/announcements.md).
+
 ## Review Notes
 
 Listings are for discovery and are not endorsements. Maintainers may edit, reject, remove, or recategorize entries to keep the directory useful and safe.
