@@ -10,11 +10,12 @@
 // A channel whose secrets are missing is skipped with a log line.
 //
 // Safe preview: `DRY_RUN=true SLUG=botlyz node scripts/notify-telegram.mjs`.
-// X announcements include a rendered card; Telegram keeps its existing format.
+// Both channels attach the same rendered card. If the card can't be rendered,
+// Telegram still sends its text; X sends nothing.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createCardRenderer, validateSlug } from "./render-announcement.mjs";
@@ -32,7 +33,6 @@ const X = {
 const X_ENABLED = Boolean(X.key && X.secret && X.token && X.tokenSecret);
 const TELEGRAM_ENABLED = Boolean(TOKEN && CHAT_ID);
 const SITE_URL = (process.env.SITE_URL || "https://lit-hub.org").replace(/\/$/, "");
-const REPO = process.env.GITHUB_REPOSITORY || "techcobain/lit_hub_ecosystem";
 const AFTER = process.env.AFTER || "HEAD";
 const BEFORE = process.env.BEFORE || "";
 const ZERO = "0000000000000000000000000000000000000000";
@@ -68,15 +68,7 @@ function socialUrl(kind, value) {
   return null;
 }
 
-function logoUrl(project) {
-  const logo = String(project.logo ?? "");
-  if (!logo.startsWith("/logos/")) return null;
-  // Telegram's sendPhoto accepts raster images only.
-  if (!/\.(png|jpe?g|webp|gif)$/i.test(logo)) return null;
-  return `https://raw.githubusercontent.com/${REPO}/${AFTER}/public${logo}`;
-}
-
-function buildMessage(slug, p) {
+export function buildMessage(slug, p) {
   const pageUrl = `${SITE_URL}/ecosystem/${encodeURIComponent(slug)}`;
   const links = [
     p.url && `<a href="${esc(p.url)}">Website</a>`,
@@ -137,52 +129,37 @@ export function buildPost(slug, p) {
   return text;
 }
 
-async function postToX(slug, project, { renderer, dryRun, credentials, fetchImpl, outputDir }) {
-  const text = buildPost(slug, project);
-  const output = path.join(outputDir, `${slug}.png`);
-  const { png, fallbackLogo } = await renderer.render(project, output);
-  if (fallbackLogo) console.warn(`${slug}: no logo configured; card uses initials`);
-  await writeFile(path.join(outputDir, `${slug}.txt`), text + "\n");
-  if (dryRun) {
-    console.log(`preview ${slug}: ${output} (no post sent)`);
-    return;
-  }
-  const { postId } = await postCardToX({ text, png, credentials, fetchImpl });
-  console.log(`posted ${slug} on X with card (id ${postId})`);
-}
-
 // --- Telegram ---
 
-async function tg(method, body, fetchImpl = fetch) {
-  const res = await fetchImpl(`https://api.telegram.org/bot${TOKEN}/${method}`, {
+async function tg(method, body, fetchImpl = fetch, query = null) {
+  const multipart = body instanceof FormData;
+  const res = await fetchImpl(`https://api.telegram.org/bot${TOKEN}/${method}${query ? `?${query}` : ""}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    // fetch sets the multipart content-type (with its boundary) itself.
+    headers: multipart ? {} : { "content-type": "application/json" },
+    body: multipart ? body : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) throw new Error(`${method}: ${data.description || res.status}`);
   return data;
 }
 
-async function announce(slug, fetchImpl) {
-  const file = path.join(ROOT, "ecosystem", `${slug}.json`);
-  if (!existsSync(file)) {
-    console.warn(`skip ${slug}: no such project file`);
-    return;
-  }
-  const project = JSON.parse(readFileSync(file, "utf8"));
-  const text = buildMessage(slug, project);
-  const photo = logoUrl(project);
+async function announce(slug, text, png, fetchImpl) {
   try {
-    if (photo) {
-      await tg("sendPhoto", { chat_id: CHAT_ID, photo, caption: text, parse_mode: "HTML" }, fetchImpl);
+    if (png) {
+      // The card isn't hosted anywhere, so upload the PNG itself. The caption
+      // goes in the query string: multipart encoding turns its \n into \r\n.
+      const form = new FormData();
+      form.append("photo", new Blob([png], { type: "image/png" }), `${slug}.png`);
+      const query = new URLSearchParams({ chat_id: CHAT_ID, caption: text, parse_mode: "HTML" });
+      await tg("sendPhoto", form, fetchImpl, query);
     } else {
       await tg("sendMessage", { chat_id: CHAT_ID, text, parse_mode: "HTML", disable_web_page_preview: false }, fetchImpl);
     }
-    console.log(`announced ${slug}`);
+    console.log(`announced ${slug}${png ? " with card" : ""}`);
   } catch (err) {
-    // A rejected photo (odd size, unreachable) shouldn't lose the announcement.
-    if (photo) {
+    // A rejected photo shouldn't lose the announcement.
+    if (png) {
       console.warn(`photo failed for ${slug} (${err.message}); sending text only`);
       await tg("sendMessage", { chat_id: CHAT_ID, text, parse_mode: "HTML" }, fetchImpl);
       console.log(`announced ${slug} (text)`);
@@ -211,6 +188,7 @@ export async function runAnnouncements({
   }
   let failed = 0;
   let renderer;
+  await mkdir(outputDir, { recursive: true });
   try {
     for (const slug of slugs) {
       const file = path.join(ROOT, "ecosystem", `${slug}.json`);
@@ -219,20 +197,39 @@ export async function runAnnouncements({
         console.error(`skip ${slug}: no such project file`);
         continue;
       }
-      if (telegramEnabled && !dryRun) {
+      const project = JSON.parse(readFileSync(file, "utf8"));
+      const telegramText = buildMessage(slug, project);
+      const xText = buildPost(slug, project);
+      await writeFile(path.join(outputDir, `${slug}.telegram.txt`), telegramText + "\n");
+      await writeFile(path.join(outputDir, `${slug}.txt`), xText + "\n");
+      // One card per project, attached on both channels.
+      let png = null;
+      try {
+        renderer ??= await rendererFactory();
+        const card = await renderer.render(project, path.join(outputDir, `${slug}.png`));
+        if (card.fallbackLogo) console.warn(`${slug}: no logo configured; card uses initials`);
+        png = card.png;
+      } catch (err) {
+        console.error(`card failed for ${slug}: ${err.message}`);
+        if (dryRun) failed++;
+      }
+      if (dryRun) {
+        console.log(`preview ${slug} in ${outputDir} (nothing sent)`);
+        continue;
+      }
+      if (telegramEnabled) {
         try {
-          await announce(slug, fetchImpl);
+          await announce(slug, telegramText, png, fetchImpl);
         } catch (err) {
           failed++;
           console.error(`Telegram failed for ${slug}: ${err.message}`);
         }
       }
-      if (xEnabled || dryRun) {
+      if (xEnabled) {
         try {
-          renderer ??= await rendererFactory();
-          await postToX(slug, JSON.parse(readFileSync(file, "utf8")), {
-            renderer, dryRun, credentials, fetchImpl, outputDir,
-          });
+          if (!png) throw new Error("no card, so no post sent");
+          const { postId } = await postCardToX({ text: xText, png, credentials, fetchImpl });
+          console.log(`posted ${slug} on X with card (id ${postId})`);
         } catch (err) {
           failed++;
           console.error(`X failed for ${slug}: ${err.message}`);

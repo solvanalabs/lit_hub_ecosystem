@@ -1,9 +1,13 @@
-# Announcement cards for X
+# Announcement cards for Telegram and X
 
 When a new `ecosystem/<slug>.json` is merged into `main`, the existing
-announcement workflow renders a card from its `name` and `logo`, uploads the
-PNG to X, and attaches it to the announcement. Post text and Telegram's
-existing announcement format are preserved.
+announcement workflow renders a card from its `name` and `logo` and attaches
+the same PNG to both announcements: Telegram sends it as a photo with the
+existing HTML caption, and X uploads it and attaches it to the existing post
+text. Neither channel's text changes.
+
+If the card can't be rendered, Telegram still sends its text announcement,
+while X sends nothing.
 
 ## Render
 
@@ -36,9 +40,15 @@ npm test
 
 The X integration (`scripts/x-card.mjs`) uploads a generated PNG with
 `POST /2/media/upload`, then sends the existing post text and returned media ID
-to `POST /2/tweets`. Tests use a fake transport and fake credentials; they do
-not contact X or read real secrets. Upload failure prevents a text-only post.
-There are no automatic publication retries.
+to `POST /2/tweets`. Upload failure prevents a text-only post.
+
+Telegram receives the PNG as a multipart `sendPhoto` upload. `chat_id`,
+`caption` and `parse_mode` go in the query string, because multipart encoding
+would turn the caption's line breaks into `\r\n`. If Telegram rejects the
+photo, the text is sent on its own, as before.
+
+Tests use a fake transport and fake credentials; they do not contact X or
+Telegram or read real secrets. There are no automatic publication retries.
 
 ## Workflow and safe previews
 
@@ -53,8 +63,9 @@ For an end-to-end preview without publishing to **either** channel:
 DRY_RUN=true SLUG=telegram-wallet,vooi node scripts/notify-telegram.mjs
 ```
 
-This writes PNGs and corresponding post text to `output/announcements/`, even
-when no secrets are set. Manual workflow runs default to `dry_run: true`;
+This writes, for each slug, the card (`<slug>.png`), the X post text
+(`<slug>.txt`) and the Telegram caption (`<slug>.telegram.txt`) to
+`output/announcements/`, even when no secrets are set. Manual workflow runs default to `dry_run: true`;
 uncheck it only when intentionally publishing the requested slugs. Automatic
 push runs still publish newly added projects. Editing an existing listing does
 not reannounce it, and merging changes to the renderer alone sends no posts.

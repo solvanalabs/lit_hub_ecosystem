@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createCardRenderer, readProject, validateSlug } from "../scripts/render-announcement.mjs";
 import { postCardToX } from "../scripts/x-card.mjs";
-import { buildPost, runAnnouncements } from "../scripts/notify-telegram.mjs";
+import { buildMessage, buildPost, runAnnouncements } from "../scripts/notify-telegram.mjs";
 
 let renderer, temp, example;
 before(async () => {
@@ -127,6 +127,74 @@ test("full notifier dry run renders JSON-based cards and text without contacting
   assert.deepEqual(png, example.png);
   const project = await readProject("telegram-wallet");
   assert.equal(await readFile(path.join(outputDir, "telegram-wallet.txt"), "utf8"), buildPost("telegram-wallet", project) + "\n");
+  assert.equal(await readFile(path.join(outputDir, "telegram-wallet.telegram.txt"), "utf8"),
+    buildMessage("telegram-wallet", project) + "\n");
+});
+
+// Serializes each request the way fetch would, so multipart bodies are checked as sent.
+function recordingFetch(calls, telegramReply = () => ({ ok: true, result: {} })) {
+  return async (url, options) => {
+    const request = new Request(url, options);
+    const method = new URL(url).pathname.split("/").pop();
+    if (url.startsWith("https://api.telegram.org/")) {
+      const multipart = request.headers.get("content-type").startsWith("multipart/form-data");
+      calls.push({ channel: "telegram", method, query: new URL(url).searchParams,
+        form: multipart ? await request.formData() : null, json: multipart ? null : await request.json() });
+      const [data, status] = [].concat(telegramReply(method));
+      return response(data, status ?? 200);
+    }
+    calls.push({ channel: "x", body: await request.json() });
+    return response({ data: { id: String(calls.length) } });
+  };
+}
+
+test("Telegram uploads the same card as X, with the existing HTML caption", async () => {
+  const calls = [];
+  const outputDir = path.join(temp, "both-channels");
+  const code = await runAnnouncements({
+    slugs: ["telegram-wallet"], dryRun: false, xEnabled: true, telegramEnabled: true,
+    credentials, outputDir, fetchImpl: recordingFetch(calls),
+  });
+  assert.equal(code, 0);
+  assert.deepEqual(calls.map((c) => c.method ?? c.channel), ["sendPhoto", "x", "x"]);
+  const card = await readFile(path.join(outputDir, "telegram-wallet.png"));
+  assert.deepEqual([...calls[0].form.keys()], ["photo"]);
+  const photo = calls[0].form.get("photo");
+  assert.equal(photo.type, "image/png");
+  assert.equal(photo.name, "telegram-wallet.png");
+  assert.deepEqual(Buffer.from(await photo.arrayBuffer()), card);
+  assert.deepEqual(Buffer.from(calls[1].body.media, "base64"), card);
+  // Exact caption, \n line breaks intact.
+  assert.equal(calls[0].query.get("caption"), buildMessage("telegram-wallet", await readProject("telegram-wallet")));
+  assert.equal(calls[0].query.get("parse_mode"), "HTML");
+});
+
+test("a rejected Telegram photo still sends the text announcement", async () => {
+  const calls = [];
+  const code = await runAnnouncements({
+    slugs: ["vooi"], dryRun: false, xEnabled: false, telegramEnabled: true,
+    credentials, outputDir: path.join(temp, "photo-rejected"),
+    fetchImpl: recordingFetch(calls, (method) =>
+      method === "sendPhoto" ? [{ ok: false, description: "Bad Request: wrong file" }, 400] : { ok: true, result: {} }),
+  });
+  assert.equal(code, 0);
+  assert.deepEqual(calls.map((c) => c.method), ["sendPhoto", "sendMessage"]);
+  assert.equal(calls[1].json.text, buildMessage("vooi", await readProject("vooi")));
+});
+
+test("when the card can't be rendered, Telegram sends text and X sends nothing", async () => {
+  const calls = [];
+  const code = await runAnnouncements({
+    slugs: ["telegram-wallet"], dryRun: false, xEnabled: true, telegramEnabled: true,
+    credentials, outputDir: path.join(temp, "no-card"),
+    rendererFactory: async () => ({
+      render: async () => { throw new Error("Corrupt logo"); },
+      close: async () => {},
+    }),
+    fetchImpl: recordingFetch(calls),
+  });
+  assert.equal(code, 1);
+  assert.deepEqual(calls.map((c) => c.method ?? c.channel), ["sendMessage"]);
 });
 
 test("full notifier renders each project and attaches its own media ID, using one browser", async () => {
